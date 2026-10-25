@@ -119,6 +119,7 @@ footer{text-align:center;color:#b08080;font-size:13px;margin-top:40px}
 
 <canvas id="fx"></canvas>
 <div class="float-hearts" id="hearts"></div>
+<button id="music" aria-label="music on/off" style="position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:45;width:48px;height:48px;border-radius:50%;border:2.5px solid #3a2a2a;background:#fff;font-size:22px;display:none;cursor:pointer;box-shadow:0 4px 14px rgba(217,83,106,.18)">🎵</button>
 
 <main>
   <!-- hero -->
@@ -280,11 +281,50 @@ footer{text-align:center;color:#b08080;font-size:13px;margin-top:40px}
   }, {threshold:.15});
   function startReveal(){ document.querySelectorAll('.fade').forEach(function(el){ io.observe(el); }); }
 
+  /* ---------- music box: Happy Birthday (public domain melody) ---------- */
+  var AC = window.AudioContext || window.webkitAudioContext, ac = null, master = null, musicOn = false, loopTimer = null;
+  var N = {G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99};
+  var song = [['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],
+              ['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],
+              ['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',2],
+              ['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',3]];
+  var beat = 0.42;
+  function note(f, t, d){
+    [[1,'sine',.9],[2,'sine',.25],[3,'triangle',.08]].forEach(function(h){
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = h[1]; o.frequency.value = f*h[0];
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(h[2], t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.9, d*1.6));
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + Math.max(1, d*1.7));
+    });
+  }
+  function playSong(){
+    if (!musicOn) return;
+    var t = ac.currentTime + 0.1, total = 0;
+    song.forEach(function(n){ note(N[n[0]], t + total*beat, n[1]*beat); total += n[1]; });
+    loopTimer = setTimeout(playSong, (total*beat + 3) * 1000);
+  }
+  function startMusic(){
+    if (!AC) return;
+    if (!ac){ ac = new AC(); master = ac.createGain(); master.gain.value = 0.18; master.connect(ac.destination); }
+    if (ac.state === 'suspended') ac.resume();
+    musicOn = true; mbtn.textContent = '🎵'; mbtn.style.opacity = 1; playSong();
+  }
+  function stopMusic(){
+    musicOn = false; clearTimeout(loopTimer); mbtn.textContent = '🔇'; mbtn.style.opacity = .7;
+    if (ac){ master.gain.setTargetAtTime(0, ac.currentTime, 0.05); setTimeout(function(){ if(!musicOn) master.gain.value = 0.18; }, 400); }
+  }
+  var mbtn = document.getElementById('music');
+  mbtn.addEventListener('click', function(){ musicOn ? stopMusic() : startMusic(); });
+
   /* ---------- gift open ---------- */
   var gift = document.getElementById('gift'), box = document.getElementById('box'), opened = false;
   gift.addEventListener('click', function(){
     if (opened) return; opened = true;
     box.classList.add('open');
+    try { startMusic(); } catch(err) {}
+    mbtn.style.display = 'block';
     setTimeout(function(){
       burst(160, innerWidth/2, innerHeight/2);
       gift.classList.add('gone');
